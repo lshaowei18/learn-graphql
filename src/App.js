@@ -12,36 +12,42 @@ const GITHUB_AXIOS_CLIENT = axios.create({
   }
 })
 
-const GET_ORGANIZATION = `
-  query getIssues($organization: String!){
+const GITHUB_GRAPHQL_QUERY = `
+  query getIssues($organization: String!, $repository: String!){
     organization(login: $organization) {
       name
       url
+      repository(name: $repository) {
+        name
+        url
+      }
     }
   }
 `
 
-const fetchDataFromGithub = (organization) => {
+const fetchDataFromGithub = (organization, repository) => {
   return GITHUB_AXIOS_CLIENT.post('', {
-    query: GET_ORGANIZATION,
-    variables: { organization }
+    query: GITHUB_GRAPHQL_QUERY,
+    variables: { organization, repository }
   })
 }
 
 const App = () => {
-  const [url, setUrl] = useState('the-road-to-learn-react')
+  const [url, setUrl] = useState('google/tink')
   const [organization, setOrganization] = useState(null)
   const [errors, setErrors] = useState(null)
 
   const fetchAndUpdateOrganization = async () => {
-    const [ org ] = url.split('/')
-    const result = await fetchDataFromGithub(org)
+    const [ org, repo ] = url.split('/')
+    const result = await fetchDataFromGithub(org, repo)
+    console.log(result)
     setErrors(result?.data?.errors)
     setOrganization(result?.data?.data?.organization)
   }
 
   useEffect(() => {
     fetchAndUpdateOrganization()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const renderOrganization = () => {
@@ -94,6 +100,18 @@ const Organization = ({ organization }) => {
       <p>
         <strong>Organization: </strong>
         <a href={organization.url}>{organization.name}</a>
+      </p>
+      <Repository repository={organization.repository}/>
+    </div>
+  )
+}
+
+const Repository = ({ repository }) => {
+  return (
+    <div>
+      <p>
+        <strong>Repository: </strong>
+        <a href={repository.url}>{repository.name}</a>
       </p>
     </div>
   )
