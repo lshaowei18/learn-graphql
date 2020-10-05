@@ -13,32 +13,31 @@ const GITHUB_AXIOS_CLIENT = axios.create({
 })
 
 const GET_ORGANIZATION = `
-  {
-    organization(login: "the-road-to-learn-react") {
+  query getIssues($organization: String!){
+    organization(login: $organization) {
       name
       url
     }
   }
 `
 
-const fetchDataFromGithub = () => {
+const fetchDataFromGithub = (organization) => {
   return GITHUB_AXIOS_CLIENT.post('', {
-    query: GET_ORGANIZATION
+    query: GET_ORGANIZATION,
+    variables: { organization }
   })
 }
 
-// Get token from env var and create axios client
-// Create react component
-// Make graphql call
 const App = () => {
-
+  const [url, setUrl] = useState('the-road-to-learn-react')
   const [organization, setOrganization] = useState(null)
   const [errors, setErrors] = useState(null)
 
   const fetchAndUpdateOrganization = async () => {
-    const result = await fetchDataFromGithub()
-    setErrors(result.data.errors)
-    setOrganization(result.data.data.organization)
+    const [ org ] = url.split('/')
+    const result = await fetchDataFromGithub(org)
+    setErrors(result?.data?.errors)
+    setOrganization(result?.data?.data?.organization)
   }
 
   useEffect(() => {
@@ -51,7 +50,7 @@ const App = () => {
         <div>
           <h2>Failed to fetch issues from Github.</h2>
           <ul>
-            {errors.map(error => <li>{error.message}</li>)}
+            {errors.map((error, index) => <li key={index}>{error.message}</li>)}
           </ul>
         </div>
       )
@@ -64,14 +63,23 @@ const App = () => {
   
   const onSubmit = async (event) => {
     event.preventDefault()
-    await fetchDataFromGithub('hi')
+    await fetchAndUpdateOrganization()
+  }
+
+  const onChange = (event) => {
+    setUrl(event.target.value)
   }
   return (
     <div>
       <h1>{TITLE}</h1>
       <form onSubmit={onSubmit}>
         <label htmlFor="urlInput">https://github.com/</label>
-        <input id="urlInput" type="text"/>
+        <input 
+          id="urlInput" 
+          type="text"
+          onChange={onChange}
+          value={url}
+          />
         <input type="submit" value="Submit"/>
       </form>
       {renderOrganization()}
