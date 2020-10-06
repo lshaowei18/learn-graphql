@@ -13,14 +13,14 @@ const GITHUB_AXIOS_CLIENT = axios.create({
 })
 
 const GITHUB_GRAPHQL_QUERY = `
-  query getIssues($organization: String!, $repository: String!){
+  query getIssues($organization: String!, $repository: String!, $cursor: String){
     organization(login: $organization) {
       name
       url
       repository(name: $repository) {
         name
         url
-        issues(last: 5) {
+        issues(first: 5, after: $cursor, states: [OPEN]) {
           edges {
             node {
               id
@@ -28,16 +28,20 @@ const GITHUB_GRAPHQL_QUERY = `
               url
             }
           }
+          pageInfo {
+            endCursor
+            hasNextPage
+          }
         }
       }
     }
   }
 `
 
-const fetchIssuesFromGithub = (organization, repository) => {
+const fetchIssuesFromGithub = (organization, repository, cursor) => {
   return GITHUB_AXIOS_CLIENT.post('', {
     query: GITHUB_GRAPHQL_QUERY,
-    variables: { organization, repository }
+    variables: { organization, repository, cursor }
   })
 }
 
@@ -46,12 +50,44 @@ const App = () => {
   const [organization, setOrganization] = useState(null)
   const [errors, setErrors] = useState(null)
 
+  const resolveIssueQuery = (queryResult, cursor) => {
+    const { data, errors } = queryResult?.data
+    if (!cursor) {
+      setErrors(errors)
+      setOrganization(data?.organization)
+      return
+    }
+    const oldIssues = organization.repository.issues.edges
+    const newIssues = data?.organization?.repository?.issues?.edges
+    const updatedIssues = [...oldIssues, ...newIssues]
+
+    setOrganization({
+      ...data.organization,
+      repository: {
+        ...data.organization.repository,
+        issues: {
+          ...data.organization.repository.issues,
+          edges: updatedIssues,
+        }
+      }
+    })
+    setErrors(errors)
+  }
+
   const fetchAndUpdateOrganization = async () => {
     const [ org, repo ] = url.split('/')
     const result = await fetchIssuesFromGithub(org, repo)
     console.log(result)
-    setErrors(result?.data?.errors)
-    setOrganization(result?.data?.data?.organization)
+    resolveIssueQuery(result)
+  }
+
+  const onFetchMoreIssues = async () => {
+    const cursor = organization.repository.issues.pageInfo.endCursor
+    const result = await fetchIssuesFromGithub(
+      organization.name,
+      organization.repository.name,
+      cursor)
+    resolveIssueQuery(result, cursor)
   }
 
   useEffect(() => {
@@ -79,7 +115,7 @@ const App = () => {
     }
 
     if (organization) {
-      return <Organization organization={organization}/>
+      return <Organization organization={organization} onFetchMoreIssues={onFetchMoreIssues}/>
     }
   }
   
@@ -109,7 +145,7 @@ const App = () => {
   )
 }
 
-const Organization = ({ organization }) => {
+const Organization = ({ organization, onFetchMoreIssues }) => {
   return (
     <div>
       <h2>Issues from</h2>
@@ -117,12 +153,12 @@ const Organization = ({ organization }) => {
         <strong>Organization: </strong>
         <a href={organization.url}>{organization.name}</a>
       </p>
-      <Repository repository={organization.repository}/>
+      <Repository repository={organization.repository} onFetchMoreIssues={onFetchMoreIssues}/>
     </div>
   )
 }
 
-const Repository = ({ repository }) => {
+const Repository = ({ repository, onFetchMoreIssues }) => {
   return (
     <div>
       <p>
@@ -136,6 +172,7 @@ const Repository = ({ repository }) => {
           </li>
         ))}
       </ul>
+      {repository.issues.pageInfo.hasNextPage && <button onClick={onFetchMoreIssues}>More</button>}
     </div>
   )
 }
