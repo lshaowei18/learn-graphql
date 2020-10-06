@@ -60,6 +60,9 @@ const App = () => {
   }, [])
 
   const renderOrganization = () => {
+    if (!errors && !organization) {
+      return <h2>Loading...</h2>
+    }
     if (errors) {
       return (
         <div>
@@ -70,10 +73,14 @@ const App = () => {
         </div>
       )
     }
+
+    if (!organization?.repository) {
+      return <h2>Failed to find repository.</h2>
+    }
+
     if (organization) {
       return <Organization organization={organization}/>
     }
-    return 'Loading...'
   }
   
   const onSubmit = async (event) => {
