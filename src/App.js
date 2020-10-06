@@ -12,14 +12,19 @@ const GITHUB_AXIOS_CLIENT = axios.create({
   }
 })
 
-const GITHUB_GRAPHQL_QUERY = `
+const GITHUB_FETCH_ISSUE_QUERY = `
   query getIssues($organization: String!, $repository: String!, $cursor: String){
     organization(login: $organization) {
       name
       url
       repository(name: $repository) {
+        id
         name
         url
+        viewerHasStarred
+        stargazers {
+          totalCount
+        }
         issues(first: 5, after: $cursor, states: [OPEN]) {
           edges {
             node {
@@ -38,9 +43,43 @@ const GITHUB_GRAPHQL_QUERY = `
   }
 `
 
+const GITHUB_ADD_STAR_QUERY = `
+  mutation ($repositoryId: ID!) {
+    addStar(input: {starrableId:$repositoryId}) {
+      starrable {
+        viewerHasStarred
+      }
+    }
+  }
+`
+
+const GITHUB_REMOVE_STAR_QUERY = `
+  mutation ($repositoryId: ID!) {
+    removeStar(input: {starrableId:$repositoryId}) {
+      starrable {
+        viewerHasStarred
+      }
+    }
+  }
+`
+
+const addStarToRepository = (repositoryId) => {
+  return GITHUB_AXIOS_CLIENT.post('', {
+    query: GITHUB_ADD_STAR_QUERY,
+    variables: { repositoryId }
+  })
+}
+
+const removeStarFromRepository = (repositoryId) => {
+  return GITHUB_AXIOS_CLIENT.post('', {
+    query: GITHUB_REMOVE_STAR_QUERY,
+    variables: { repositoryId }
+  })
+}
+
 const fetchIssuesFromGithub = (organization, repository, cursor) => {
   return GITHUB_AXIOS_CLIENT.post('', {
-    query: GITHUB_GRAPHQL_QUERY,
+    query: GITHUB_FETCH_ISSUE_QUERY,
     variables: { organization, repository, cursor }
   })
 }
@@ -90,6 +129,35 @@ const App = () => {
     resolveIssueQuery(result, cursor)
   }
 
+  const resolveStarMutation = (viewerHasStarred) => {
+    
+    setOrganization({
+      ...organization,
+      repository: {
+        ...organization.repository,
+        viewerHasStarred,
+        stargazers: {
+          totalCount: viewerHasStarred ? 
+            organization.repository.stargazers.totalCount + 1 : 
+            organization.repository.stargazers.totalCount - 1
+        }
+      }
+    })
+  }
+
+  const onStarRepository = async () => {
+    // Has starred, removing star now
+    if (organization.repository.viewerHasStarred) {
+      const result = await removeStarFromRepository(organization.repository.id)
+      resolveStarMutation(result.data.data.removeStar.starrable.viewerHasStarred)
+    }
+    else {
+      const result = await addStarToRepository(organization.repository.id)
+      resolveStarMutation(result.data.data.addStar.starrable.viewerHasStarred)
+    }
+    
+  }
+
   useEffect(() => {
     fetchAndUpdateOrganization()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,7 +183,10 @@ const App = () => {
     }
 
     if (organization) {
-      return <Organization organization={organization} onFetchMoreIssues={onFetchMoreIssues}/>
+      return <Organization 
+        organization={organization} 
+        onFetchMoreIssues={onFetchMoreIssues}
+        onStarRepository={onStarRepository}/>
     }
   }
   
@@ -145,7 +216,7 @@ const App = () => {
   )
 }
 
-const Organization = ({ organization, onFetchMoreIssues }) => {
+const Organization = ({ organization, onFetchMoreIssues, onStarRepository }) => {
   return (
     <div>
       <h2>Issues from</h2>
@@ -153,18 +224,28 @@ const Organization = ({ organization, onFetchMoreIssues }) => {
         <strong>Organization: </strong>
         <a href={organization.url}>{organization.name}</a>
       </p>
-      <Repository repository={organization.repository} onFetchMoreIssues={onFetchMoreIssues}/>
+      <Repository 
+        repository={organization.repository} 
+        onFetchMoreIssues={onFetchMoreIssues}
+        onStarRepository={onStarRepository}
+        />
     </div>
   )
 }
 
-const Repository = ({ repository, onFetchMoreIssues }) => {
+const Repository = ({ repository, onFetchMoreIssues, onStarRepository }) => {
   return (
     <div>
       <p>
         <strong>Repository: </strong>
         <a href={repository.url}>{repository.name}</a>
       </p>
+      <p>
+        Number of stargazers: {repository.stargazers.totalCount}
+      </p>
+      <button onClick={onStarRepository}>
+        {repository.viewerHasStarred ? "Unstar" : "Star"}
+      </button>
       <ul>
         {repository.issues.edges.map(issue => (
           <li key={issue.node.id}>
