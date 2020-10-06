@@ -20,12 +20,21 @@ const GITHUB_GRAPHQL_QUERY = `
       repository(name: $repository) {
         name
         url
+        issues(last: 5) {
+          edges {
+            node {
+              id
+              title
+              url
+            }
+          }
+        }
       }
     }
   }
 `
 
-const fetchDataFromGithub = (organization, repository) => {
+const fetchIssuesFromGithub = (organization, repository) => {
   return GITHUB_AXIOS_CLIENT.post('', {
     query: GITHUB_GRAPHQL_QUERY,
     variables: { organization, repository }
@@ -39,7 +48,7 @@ const App = () => {
 
   const fetchAndUpdateOrganization = async () => {
     const [ org, repo ] = url.split('/')
-    const result = await fetchDataFromGithub(org, repo)
+    const result = await fetchIssuesFromGithub(org, repo)
     console.log(result)
     setErrors(result?.data?.errors)
     setOrganization(result?.data?.data?.organization)
@@ -113,6 +122,13 @@ const Repository = ({ repository }) => {
         <strong>Repository: </strong>
         <a href={repository.url}>{repository.name}</a>
       </p>
+      <ul>
+        {repository.issues.edges.map(issue => (
+          <li key={issue.node.id}>
+            <a href={issue.node.url}>{issue.node.title}</a>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
